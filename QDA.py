@@ -25,33 +25,37 @@ is_malignant = train_Y['diagnosis'] == 'M'
 train_Z_B = train_Z[is_benign]
 train_Z_M = train_Z[is_malignant]
 
-#calculate covariance matrix
-var_B = train_Z_B.std(axis = 0) ** 2
-var_M = train_Z_M.std(axis = 0) ** 2
-var_C = (len(train_Z_M) * var_M + len(train_Z_B) * var_B) / (len(train_Z_M) + len(train_Z_B))
+#calculate parameters for Gaussians
+cov_M = numpy.cov(train_Z_M,rowvar=False)
+cov_B = numpy.cov(train_Z_M,rowvar=False)
+mu_M = train_Z_M.mean()
+mu_B = train_Z_B.mean()
 
-#calculate decision boundary
-mu_B = train_Z_B.mean(axis = 0)
-mu_M = train_Z_M.mean(axis = 0)
-w = (mu_M - mu_B) / var_C
+#esitmate P(X|Y) and P(Y) for each class
+num_M = 0
+num_B = 0
+for diagnosis in train_Y_is_M:
+    if diagnosis == True:
+        num_M += 1
+    else:
+        num_B += 1
+prob_M = num_M / len(train_Y) #P(Y=M)
+prob_B = num_B / len(train_Y) #P(Y=B)
+prob_X_given_M_train = mv_norm.pdf(train_Z,mu_M,cov_M) #P(X|Y=M)
+prob_X_given_B_train = mv_norm.pdf(train_Z,mu_B,cov_B) #P(X|Y=B)
+prob_X_given_M_test  = mv_norm.pdf(test_Z,mu_M,cov_M) #P(X|Y=M)
+prob_X_given_B_test  = mv_norm.pdf(test_Z,mu_B,cov_B) #P(X|Y=B)
+p_M_train = prob_X_given_M_train * prob_M
+p_B_train = prob_X_given_B_train * prob_B
+p_M_test  = prob_X_given_M_test * prob_M
+p_B_test  = prob_X_given_B_test * prob_B
 
-#determine theta
-distances_train = numpy.dot(train_Z,w)
-max_success = 0.0
-max_theta = -10
-for theta in range(-9,10):
-    predictions_train = distances_train > theta
-    success_rate = (predictions_train == train_Y_is_M).mean()
-    if success_rate > max_success:
-        max_success = success_rate
-        max_theta = theta
+#make predictions based on estimated probabilities and calculate error
+predictions_train = p_M_train > p_B_train
+success_train = (predictions_train == train_Y_is_M).mean()
+predictions_test = p_M_test > p_B_test
+success_test = (predictions_test == test_Y_is_M).mean()
+error_train = 1.0 - success_train
+error_test = 1.0 - success_test
 
-#use classifier on test set and determine error
-distances_test = numpy.dot(test_Z,w)
-predictions_test = distances_test > max_theta
-test_rate = (predictions_test == test_Y_is_M).mean()
-training_error = 1.0 - max_success
-test_error = 1.0 - test_rate
-print('training success rate: {} test success rate: {}'.format(max_success,test_rate))
-print('training error: {} test error: {}'.format(training_error,test_error))
-print('done')
+print('training error: {} || test errror: {}'.format(error_train,error_test))
